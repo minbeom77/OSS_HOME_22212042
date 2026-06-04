@@ -81,7 +81,7 @@
 
 ## 2. System Context Diagram
 
-<img src="./images/21_context_diagram.pngg" width="800">
+<img src="./images/21_context_diagram.png" width="800">
 
 ### User → System
 
