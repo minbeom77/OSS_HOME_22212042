@@ -512,10 +512,6 @@ H.O.M.E은 사용자의 식사 선택 행동을 데이터 기반으로 최적화
 
 ### 5.3 Problem Formalization (문제의 형식화)
 
-**목적함수:**
-
-$$\text{minimize} \{ \text{Total\_Delivery},\ \text{Total\_MealKit},\ \text{Total\_Cooking} \}$$
-
 | 변수 | 공식 |
 |:---:|:---:|
 | **Total_Delivery** | `foodPrice + userInputDeliveryFee + max(0, minOrder − foodPrice)` |
