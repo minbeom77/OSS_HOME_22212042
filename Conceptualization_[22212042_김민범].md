@@ -5,6 +5,17 @@
 
 ---
 
+
+## Revision History
+
+| Revision date | Version | Description | Author |
+|---|---|---|---|
+| 2026-03-25 | 1.00 | 초기 버전 | 김민범 |
+| 2026-06-01 | 1.01 | 다이어그램 수정 | 김민범 |
+
+
+---
+
 ## Contents
 
 1. [Business Purpose](#1-business-purpose)
@@ -16,6 +27,8 @@
 7. [Reference](#7-reference)
 
 ---
+
+
 
 ## 1. Business Purpose
 
@@ -68,40 +81,8 @@
 
 ## 2. System Context Diagram
 
-```mermaid
-graph LR
-    %% Style definitions based on logo colors
-    classDef user fill:#333333,stroke:#000,color:#fff,stroke-width:2px;
-    classDef system fill:#F47F20,stroke:#D35400,color:#fff,stroke-width:3px;
-    classDef external fill:#ffffff,stroke:#4A90E2,color:#333,stroke-width:2px,stroke-dasharray: 5 5;
-
-    %% Node definitions
-    User([User]):::user
-    HOME[H.O.M.E System]:::system
-    
-    subgraph External_Entities [External Servers & DB]
-        RecipeAPI[Public Recipe API]:::external
-        ShoppingAPI[Shopping API]:::external
-        MartDB[(Virtual Mart DB)]:::external
-        UserDB[(User DB)]:::external
-    end
-
-    %% Data Flow (User <-> System)
-    User -- "Login / Select Menu<br/>Input Labor Time" --> HOME
-    HOME -- "Provide Comparison Chart<br/>Meal Recommendation" --> User
-
-    %% Data Flow (System <-> External)
-    HOME -- "Request Recipe Data" --> RecipeAPI
-    HOME -- "Request Ingredient &<br/>MealKit Info" --> ShoppingAPI
-    HOME -- "Request Delivery Price" --> MartDB
-    HOME -- "Save/Load User Logs" --> UserDB
-
-    %% Response Flow
-    RecipeAPI -.-> HOME
-    ShoppingAPI -.-> HOME
-    MartDB -.-> HOME
-    UserDB -.-> HOME
-
+<img src="./images/21_context_diagram.pngg" width="800">
+   
 
 ```
 
