@@ -30,7 +30,6 @@ public class CostCalculator {
 
     @Transactional
     public AnalysisDto.Response calculate(String userId, AnalysisDto.Request req) {
-        // DB에 메뉴가 없어도 예외로 튕기지 않고, 사용자가 입력한 정보를 기반으로 유기적 스케일링 가동
         Menu menu = menuRepository.findByMenuName(req.getMenuName())
                 .orElseGet(() -> createDynamicFallbackMenu(req.getMenuName(), req.getCategory(), req.getFoodPrice()));
 
@@ -69,14 +68,11 @@ public class CostCalculator {
     }
 
     private Menu createDynamicFallbackMenu(String menuName, String category, int foodPrice) {
-        log.info(" [정밀 비교 Fallback 가동] '{}' 메뉴가 DB에 없어 입력가 {}원 비례 연산합니다.", menuName, foodPrice);
-        
-        // 사용자가 가격을 0원으로 입력하는것 막기
+        log.info("메뉴가 DB에 없어 입력가 {}원 기준으로 연산합니다.", menuName, foodPrice);
         int referencePrice = foodPrice > 0 ? foodPrice : 15000;
 
-        // 시장 실거래가 데이터 비율 기반 역산 알고리즘 적용
-        int estimatedKitPrice = (int)(referencePrice * 0.55);       // 배달음식 단가의 약 55%가 밀키트 가격
-        int estimatedIngredientCost = (int)(referencePrice * 0.40); // 배달음식 단가의 약 40%가 순수 식재료 마트가
+        int estimatedKitPrice = (int)(referencePrice * 0.55);       
+        int estimatedIngredientCost = (int)(referencePrice * 0.40); 
 
         Menu fallbackMenu = new Menu();
         fallbackMenu.setMenuName(menuName);
@@ -111,7 +107,11 @@ public class CostCalculator {
                 }
             }
         }
-        return finalFoodPrice + req.getDeliveryFee() + Math.max(0, req.getMinOrder() - finalFoodPrice);
+
+        //최소주문금액에 도달하기 위해 모자란 부족 금액 추가
+        int missingCost = Math.max(0, req.getMinOrder() - finalFoodPrice);
+
+        return finalFoodPrice + missingCost + req.getDeliveryFee();
     }
 
     private int calcMealKit(AnalysisDto.Request req, Menu menu) {
@@ -164,7 +164,7 @@ public class CostCalculator {
                         .mapToInt(Ingredient::getTotalPrice).sum();
             }
         } catch (Exception e) {
-            log.warn("외부 API 레시피 연동을 우회하여 비례식 추정 단가를 사용합니다.");
+            log.warn("외부 API 레시피 연동 실패: 비례식 가격 적용");
         }
         
         return menu.getIngredientCost() != null ? menu.getIngredientCost() : (int)(req.getFoodPrice() * 0.40);
@@ -191,11 +191,13 @@ public class CostCalculator {
     private Map<String, List<BreakdownItem>> buildBreakdown(
             AnalysisDto.Request req, Integer mealkit, Integer cooking, int ingredientCost, Menu menu) {
         Map<String, List<BreakdownItem>> bd = new LinkedHashMap<>();
-       bd.put("delivery", List.of(
-        new BreakdownItem("음식 기본가격 및 옵션가격 합산", req.getFoodPrice()),
-        new BreakdownItem("배달팁", req.getDeliveryFee()),
-        new BreakdownItem("최소주문 금액 미달 추가 비용", Math.max(0, req.getMinOrder() - req.getFoodPrice()))
+    
+        bd.put("delivery", List.of(
+                new BreakdownItem("선택 메뉴 기본가 및 옵션가", req.getFoodPrice()),
+                new BreakdownItem("최소주문 미달 분 부족 금액", Math.max(0, req.getMinOrder() - req.getFoodPrice())),
+                new BreakdownItem("배달팁", req.getDeliveryFee())
         ));
+        
         if (mealkit != null) {
             int baseKitPrice = (req.getKitPrice() != null && req.getKitPrice() > 0) ? req.getKitPrice() : (menu.getKitPrice() != null ? menu.getKitPrice() : (int)(req.getFoodPrice() * 0.55));
             double perServingKitPrice = baseKitPrice / 2.0;
@@ -207,8 +209,9 @@ public class CostCalculator {
             bd.put("mealkit", List.of(
                     new BreakdownItem("밀키트 1인분 환산가 합산", displayKitPrice),
                     new BreakdownItem("기회비용 (조리시간 × 0.2 × 최저임금)", (int)((kitMin / 60.0) * 0.2 * minWage))
-            ));
+                ));
         }
+        
         if (cooking != null) {
             int cookMin = (req.getCookMin() != null && req.getCookMin() > 0) ? req.getCookMin() : (menu.getDefaultCookMin() != null ? menu.getDefaultCookMin() : 20);
             int laborMin = (req.getLaborMin() != null && req.getLaborMin() > 0) ? req.getLaborMin() : 10;
@@ -216,7 +219,7 @@ public class CostCalculator {
             bd.put("cooking", List.of(
                     new BreakdownItem("식재료비", ingredientCost),
                     new BreakdownItem("기회비용 (조리시간 × 0.2 × 최저임금)", (int)((cookMin / 60.0) * 0.2 * minWage)),
-                    new BreakdownItem("가사노동비 (설거지시간 × 최저임금)", (int)((laborMin / 60.0) * minWage)),
+                    new BreakdownItem("가사노동비 (설거지시간 × 0.2 x 최저임금)", (int)((laborMin / 60.0) * 0.2 * minWage)),
                     new BreakdownItem("도구 비용", toolCost)
             ));
         }

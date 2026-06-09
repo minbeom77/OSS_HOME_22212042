@@ -1,5 +1,6 @@
 import { apiCalculateCost } from "../api/apiClient"; 
 
+// 백엔드 API  예외사항 Fallbackd으로 처리 
 export async function calcCosts(menu, input, ingredientList = []) {
   try {
     const res = await apiCalculateCost({
@@ -30,7 +31,7 @@ export function calcCostsLocal(menu, input) {
   const deliveryFee = input.deliveryFee || 0;
   const minOrder = input.minOrder || 0;
 
-  // 입력가가 없거나 0원일 때 배달 가격 기준 시장 실거래가 비율(55%, 40%)로 동적 역산
+  // API 연동 실패같은 예외사항 발생 시에 배달 가격 비례식 추정 단가 연산 (55%, 40%)
   const kitPrice = (input.kitPrice && input.kitPrice > 0) ? input.kitPrice : Math.round(foodPrice * 0.55);
   const ingredientCost = (menu.ingredientCost && menu.ingredientCost > 0) ? menu.ingredientCost : Math.round(foodPrice * 0.40);
 
@@ -39,7 +40,12 @@ export function calcCostsLocal(menu, input) {
   const laborMin = (input.laborMin && input.laborMin > 0) ? input.laborMin : 10;
   const toolCost = input.toolCost || 0;
 
-  const deliveryCost = foodPrice + deliveryFee + Math.max(0, minOrder - foodPrice); 
+  //최소주문에 도달하기 위해 모자라서 추가해야 하는 부족 금액
+  const missingCost = Math.max(0, minOrder - foodPrice);
+
+  // 배달 최종 비용 = 선택 메뉴 가격 + 최소주문 미달 분 부족 금액 + 배달팁
+  const deliveryCost = foodPrice + missingCost + deliveryFee; 
+
   const mType = menu.menuType || menu.type || "ALL"; 
 
   const mealKitCost = mType !== "DELIVERY_ONLY" 
@@ -57,9 +63,9 @@ export function calcCostsLocal(menu, input) {
 
   const breakdown = {
     delivery: [
-      { label: "음식 기본가 및 옵션가 합산", value: foodPrice }, 
+      { label: "선택 메뉴 기본가 및 옵션가", value: foodPrice }, 
+      { label: "최소주문 미달 분 부족 금액", value: missingCost }, 
       { label: "배달팁", value: deliveryFee }, 
-      { label: "최소주문 금액 미달 추가 비용", value: Math.max(0, minOrder - foodPrice) }
     ],
     mealkit: mealKitCost !== null ? [ 
       { label: "밀키트 1인분 환산가 합산", value: kitPrice }, 
