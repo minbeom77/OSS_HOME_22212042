@@ -1,0 +1,60 @@
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+nongsaro:
+  api:
+    key: ${NONGSARO_API_KEY:}
+    base-url: https://api.nongsaro.go.kr/service
+
+naver:
+  api:
+    client-id: ${NAVER_CLIENT_ID:}
+    client-secret: ${NAVER_CLIENT_SECRET:}
+    base-url: https://openapi.naver.com/v1/search/shop.json
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 86400000
+
+home:
+  min-wage: 10320
+
+server:
+  port: ${PORT:8080}
+
+allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:h2:mem:homedb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${DB_URL}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update

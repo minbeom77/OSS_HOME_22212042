@@ -1,11 +1,10 @@
-# ===================================================
-# H.O.M.E Project Monorepo
-# ===================================================
+# H.O.M.E Project gitignore
 
 # Frontend
 frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
+frontend/.vite/
 frontend/.env
 frontend/.env.local
 frontend/.env.*
@@ -14,6 +13,10 @@ frontend/.env.*
 backend/.gradle/
 backend/build/
 backend/out/
+
+# Spring Boot
+backend/src/main/resources/application-local.yml
+backend/src/main/resources/application-secret.yml
 
 # Logs
 *.log
@@ -24,6 +27,7 @@ yarn-error.log*
 # IDE
 .vscode/
 .idea/
+*.iml
 
 # OS
 .DS_Store
@@ -33,3 +37,13 @@ Thumbs.db
 *.tmp
 *.swp
 *.swo
+
+# Coverage
+coverage/
+
+# Generated files
+*.class
+
+# Java
+hs_err_pid*
+replay_pid*

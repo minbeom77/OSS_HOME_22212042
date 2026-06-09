@@ -6,16 +6,17 @@ import com.home.backend.domain.Menu;
 import com.home.backend.domain.Menu.Ingredient;
 import com.home.backend.dto.AnalysisDto;
 import com.home.backend.dto.AnalysisDto.BreakdownItem;
-import com.home.backend.exception.GlobalExceptionHandler.MenuNotFoundException;
 import com.home.backend.repository.AnalysisLogRepository;
 import com.home.backend.repository.MenuRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CostCalculator {
@@ -29,8 +30,9 @@ public class CostCalculator {
 
     @Transactional
     public AnalysisDto.Response calculate(String userId, AnalysisDto.Request req) {
+        // DB에 메뉴가 없어도 예외로 튕기지 않고, 사용자가 입력한 정보를 기반으로 유기적 스케일링 가동
         Menu menu = menuRepository.findByMenuName(req.getMenuName())
-                .orElseThrow(() -> new MenuNotFoundException(req.getMenuName()));
+                .orElseGet(() -> createDynamicFallbackMenu(req.getMenuName(), req.getCategory(), req.getFoodPrice()));
 
         int deliveryCost = calcDelivery(req);
 
@@ -66,6 +68,27 @@ public class CostCalculator {
                 .build();
     }
 
+    private Menu createDynamicFallbackMenu(String menuName, String category, int foodPrice) {
+        log.info(" [정밀 비교 Fallback 가동] '{}' 메뉴가 DB에 없어 입력가 {}원 비례 연산합니다.", menuName, foodPrice);
+        
+        // 사용자가 가격을 0원으로 입력하는것 막기
+        int referencePrice = foodPrice > 0 ? foodPrice : 15000;
+
+        // 시장 실거래가 데이터 비율 기반 역산 알고리즘 적용
+        int estimatedKitPrice = (int)(referencePrice * 0.55);       // 배달음식 단가의 약 55%가 밀키트 가격
+        int estimatedIngredientCost = (int)(referencePrice * 0.40); // 배달음식 단가의 약 40%가 순수 식재료 마트가
+
+        Menu fallbackMenu = new Menu();
+        fallbackMenu.setMenuName(menuName);
+        fallbackMenu.setCategory(category != null ? category : "한식");
+        fallbackMenu.setMenuType(MenuType.ALL);
+        fallbackMenu.setKitPrice(estimatedKitPrice);
+        fallbackMenu.setDeliveryPrice(referencePrice); 
+        fallbackMenu.setIngredientCost(estimatedIngredientCost);
+        fallbackMenu.setDefaultCookMin(20);
+        return fallbackMenu;
+    }
+
     private int calcDelivery(AnalysisDto.Request req) {
         int finalFoodPrice = req.getFoodPrice();
         String menu = req.getMenuName();
@@ -95,14 +118,15 @@ public class CostCalculator {
         int baseKitPrice = 0;
         if (req.getKitPrice() != null && req.getKitPrice() > 0) {
             baseKitPrice = req.getKitPrice();
-        } else if (menu.getKitPrice() != null) {
+        } else if (menu.getKitPrice() != null && menu.getKitPrice() > 0) {
             baseKitPrice = menu.getKitPrice();
         } else {
-            baseKitPrice = (int)(menu.getDeliveryPrice() * 0.6);
+            baseKitPrice = (int)(req.getFoodPrice() * 0.55);
         }
 
         double perServingKitPrice = baseKitPrice / 2.0;
-        int totalQuantity = Math.max(1, req.getFoodPrice() / (menu.getDeliveryPrice() != null ? menu.getDeliveryPrice() : 9000));
+        int deliveryComparePrice = menu.getDeliveryPrice() != null ? menu.getDeliveryPrice() : req.getFoodPrice();
+        int totalQuantity = Math.max(1, req.getFoodPrice() / (deliveryComparePrice > 0 ? deliveryComparePrice : 15000));
         int finalCalculatedKitPrice = (int)(perServingKitPrice * totalQuantity);
 
         int kitMin = (req.getKitMin() != null && req.getKitMin() > 0) ? req.getKitMin() : 15;
@@ -131,13 +155,19 @@ public class CostCalculator {
                     .map(externalApiService::fetchPrice)
                     .mapToInt(Ingredient::getTotalPrice).sum();
         }
-        List<Ingredient> fetched = externalApiService.fetchRecipe(req.getMenuName());
-        if (!fetched.isEmpty()) {
-            return fetched.stream()
-                    .map(externalApiService::fetchPrice)
-                    .mapToInt(Ingredient::getTotalPrice).sum();
+        
+        try {
+            List<Ingredient> fetched = externalApiService.fetchRecipe(req.getMenuName());
+            if (fetched != null && !fetched.isEmpty()) {
+                return fetched.stream()
+                        .map(externalApiService::fetchPrice)
+                        .mapToInt(Ingredient::getTotalPrice).sum();
+            }
+        } catch (Exception e) {
+            log.warn("외부 API 레시피 연동을 우회하여 비례식 추정 단가를 사용합니다.");
         }
-        return menu.getIngredientCost() != null ? menu.getIngredientCost() : 0;
+        
+        return menu.getIngredientCost() != null ? menu.getIngredientCost() : (int)(req.getFoodPrice() * 0.40);
     }
 
     private String getBestOption(int delivery, Integer mealkit, Integer cooking) {
@@ -161,15 +191,16 @@ public class CostCalculator {
     private Map<String, List<BreakdownItem>> buildBreakdown(
             AnalysisDto.Request req, Integer mealkit, Integer cooking, int ingredientCost, Menu menu) {
         Map<String, List<BreakdownItem>> bd = new LinkedHashMap<>();
-        bd.put("delivery", List.of(
-                new BreakdownItem("음식 기본가 및 옵션가 합산", req.getFoodPrice()),
-                new BreakdownItem("배달팁", req.getDeliveryFee()),
-                new BreakdownItem("최소주문금액 보정", Math.max(0, req.getMinOrder() - req.getFoodPrice()))
+       bd.put("delivery", List.of(
+        new BreakdownItem("음식 기본가격 및 옵션가격 합산", req.getFoodPrice()),
+        new BreakdownItem("배달팁", req.getDeliveryFee()),
+        new BreakdownItem("최소주문 금액 미달 추가 비용", Math.max(0, req.getMinOrder() - req.getFoodPrice()))
         ));
         if (mealkit != null) {
-            int baseKitPrice = (req.getKitPrice() != null && req.getKitPrice() > 0) ? req.getKitPrice() : (menu.getKitPrice() != null ? menu.getKitPrice() : 0);
+            int baseKitPrice = (req.getKitPrice() != null && req.getKitPrice() > 0) ? req.getKitPrice() : (menu.getKitPrice() != null ? menu.getKitPrice() : (int)(req.getFoodPrice() * 0.55));
             double perServingKitPrice = baseKitPrice / 2.0;
-            int totalQuantity = Math.max(1, req.getFoodPrice() / (menu.getDeliveryPrice() != null ? menu.getDeliveryPrice() : 9000));
+            int deliveryComparePrice = menu.getDeliveryPrice() != null ? menu.getDeliveryPrice() : req.getFoodPrice();
+            int totalQuantity = Math.max(1, req.getFoodPrice() / (deliveryComparePrice > 0 ? deliveryComparePrice : 15000));
             int displayKitPrice = (int)(perServingKitPrice * totalQuantity);
 
             int kitMin = (req.getKitMin() != null && req.getKitMin() > 0) ? req.getKitMin() : 15;
