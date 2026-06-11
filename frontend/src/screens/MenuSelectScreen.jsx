@@ -213,7 +213,7 @@ export default function MenuSelectScreen({ onNext, onLogout, userName, isGuest }
         </p>
         <Button 
           onClick={() => onNext(cat, cart)} 
-          disabled={cart.length === 0 || !isMinOrderSatisfied} 
+          disabled={cart.length === 0} 
           className="px-6 py-2.5 w-auto"
         >
           다음 단계 (비용 기입) →

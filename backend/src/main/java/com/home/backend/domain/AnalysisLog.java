@@ -7,6 +7,7 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "analysis_logs")
 @Getter
+@Setter 
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
@@ -20,13 +21,17 @@ public class AnalysisLog {
     private String userId;
 
     @Column(nullable = false)
-    private LocalDate date;
+    private LocalDate date; // 
 
     @Column(nullable = false, length = 60)
     private String menuName;
 
     @Column(nullable = false)
-    private String bestOption;   // 시스템이 추천한 최적의 대안 (DELIVERY / MEALKIT / COOKING)
+    private String bestOption;   // 시스템 추천
+
+    //1. 유저가 실제로 누른 버튼(delivery, mealkit, cooking)을 추가
+    @Column
+    private String chosen; 
 
     @Column(nullable = false)
     private int chosenCost;      // 유저가 최종 선택한 방식의 실제 비용

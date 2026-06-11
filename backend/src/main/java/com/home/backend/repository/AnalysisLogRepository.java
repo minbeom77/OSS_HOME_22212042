@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface AnalysisLogRepository extends JpaRepository<AnalysisLog, Long> {
+
     List<AnalysisLog> findByUserIdOrderByDateDesc(String userId);
 
     @Query("SELECT a FROM AnalysisLog a WHERE a.userId = :userId AND a.date >= :startDate ORDER BY a.date DESC")

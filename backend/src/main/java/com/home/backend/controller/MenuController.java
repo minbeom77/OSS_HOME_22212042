@@ -24,20 +24,31 @@ public class MenuController {
         return ResponseEntity.ok(menuRepository.findByCategory(category));
     }
 
-   @GetMapping("/details")
+    @GetMapping("/details")
     public ResponseEntity<Map<String, Object>> getMenuDetails(@RequestParam("menuName") String menuName) {
-        Optional<Menu> menuOpt = menuRepository.findByMenuName(menuName);
-        
+        String targetName = menuName;
+        if (menuName != null && menuName.contains(",")) {
+            targetName = menuName.split(",")[0].trim();
+        }
+
+        Optional<Menu> menuOpt = menuRepository.findByMenuName(targetName);
         Map<String, Object> result = new HashMap<>();
+
         if (menuOpt.isPresent()) {
             Menu menu = menuOpt.get();
             result.put("kitPrice", menu.getKitPrice() != null ? menu.getKitPrice() : 0);
             result.put("kitMin", 15); 
             result.put("cookMin", menu.getDefaultCookMin() != null ? menu.getDefaultCookMin() : 20);
+            result.put("menuType", menu.getMenuType() != null ? menu.getMenuType().name() : "ALL"); 
+            result.put("minOrder", menu.getMinOrder() != null ? menu.getMinOrder() : 0);
+            result.put("ingredientCost", menu.getIngredientCost() != null ? menu.getIngredientCost() : 0);
         } else {
             result.put("kitPrice", 0);
             result.put("kitMin", 15);
             result.put("cookMin", 20);
+            result.put("menuType", "ALL");
+            result.put("minOrder", 0);
+            result.put("ingredientCost", 0);
         }
         return ResponseEntity.ok(result);
     }
