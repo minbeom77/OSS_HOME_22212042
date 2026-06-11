@@ -1,10 +1,10 @@
-import apiClient from "./api"; 
+import apiClient from "./api"; // (axios 인스턴스 파일명에 맞게 경로 확인해주세요)
 
 // 1. 로그인 API
 export const apiLogin = async (userId, password) => {
   const res = await apiClient.post("/api/auth/login", { userId, password });
   if (res.data?.token) {
-    localStorage.setItem("home_token", res.data.token); //
+    localStorage.setItem("home_token", res.data.token); 
   }
   return res.data;
 };
@@ -13,7 +13,7 @@ export const apiLogin = async (userId, password) => {
 export const apiRegister = async (userId, password, name) => {
   const res = await apiClient.post("/api/auth/register", { userId, password, name });
   if (res.data?.token) {
-    localStorage.setItem("home_token", res.data.token); //
+    localStorage.setItem("home_token", res.data.token); 
   }
   return res.data;
 };
@@ -21,30 +21,40 @@ export const apiRegister = async (userId, password, name) => {
 // 3. 비용 계산 API 
 export const apiCalculateCost = async (payload) => {
   const res = await apiClient.post("/api/analysis", payload);
-  return res.data; // 백엔드가 정밀 연산한 { delivery, mealkit, cooking, best, breakdown } 리턴
+  return res.data; 
 };
 
-// 4. 월별 리포트 조회 API
+// 4. 최종 선택 결과 저장 API 
+export const apiSaveSelection = async (menuName, chosenOption) => {
+  const res = await apiClient.post("/api/analysis/select", { 
+    menuName: menuName, 
+    chosen: chosenOption 
+  });
+  return res.data;
+};
+
+// 5. 월별 리포트 조회 API (기존 유지)
 export const apiGetMonthlyReport = async () => {
   const res = await apiClient.get("/api/report/monthly");
   return res.data;
 };
 
-// 5. 전체 분석 로그 조회 API
+// 6. 전체 분석 로그 조회 API (수정됨: 백엔드 AnalysisController 주소에 맞춤)
 export const apiGetAllLogs = async () => {
-  const res = await apiClient.get("/api/report/logs");
+  const res = await apiClient.get("/api/analysis/logs"); 
   return res.data;
 };
 
-// 6. 로그아웃
+// 7. 로그아웃
 export const logout = () => {
-  localStorage.removeItem("home_token"); //
+  localStorage.removeItem("home_token"); 
 };
 
 export default {
   apiLogin,
   apiRegister,
   apiCalculateCost,
+  apiSaveSelection,
   apiGetMonthlyReport,
   apiGetAllLogs,
   logout

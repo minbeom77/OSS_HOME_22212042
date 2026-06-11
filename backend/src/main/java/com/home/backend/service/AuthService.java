@@ -42,17 +42,17 @@ public class AuthService {
 
     @Transactional
     public AnalysisDto.AuthResponse register(AnalysisDto.RegisterRequest dto) {
-        if (userRepository.existsById(dto.getUserId())) {
+        if (userRepository.existsByUserId(dto.getUserId())) {
             throw new RuntimeException("이미 존재하는 아이디입니다.");
         }
 
-        User user = User.create(
-                dto.getUserId(),
-                passwordEncoder.encode(dto.getPassword()),
-                dto.getName()
-        );
-        userRepository.save(user);
+        User user = User.builder()
+                .userId(dto.getUserId())
+                .password(passwordEncoder.encode(dto.getPassword()))
+                .name(dto.getName())
+                .build();
 
+        userRepository.save(user);
         String token = jwtService.generateToken(user.getUserId());
         return AnalysisDto.AuthResponse.builder()
                 .token(token)
@@ -83,8 +83,9 @@ public class AuthService {
                 .map(log -> AnalysisDto.LogItem.builder()
                         .id(log.getId())
                         .date(log.getDate().toString())
-                        .menu(log.getMenuName())
-                        .chosen(log.getBestOption())
+                        .menuName(log.getMenuName())     
+                        .bestOption(log.getBestOption()) 
+                        .chosen(log.getChosen())         
                         .chosenCost(log.getChosenCost())
                         .deliveryCost(log.getDeliveryCost())
                         .saving(log.getSaving())

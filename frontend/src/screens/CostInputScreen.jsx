@@ -64,11 +64,14 @@ export default function CostInputScreen({ cat, menu, loading, onNext, onBack }) 
   const [noodleSize, setNoodleSize] = useState("보통");
   const [portionSize, setPortionSize] = useState("소");
 
+  const totalQty = cartItems.reduce((acc, cur) => acc + (cur.quantity || 1), 0);
+
   useEffect(() => {
     if (cartItems.length > 0) {
       const totalBasePrice = cartItems.reduce((acc, cur) => {
         const base = cur.deliveryPrice || cur.price || 0;
-        return acc + base;
+        const qty = cur.quantity || 1;
+        return acc + (base * qty);
       }, 0);
       
       setFoodPrice(totalBasePrice);
@@ -76,7 +79,7 @@ export default function CostInputScreen({ cat, menu, loading, onNext, onBack }) 
       setKitPrice(primaryItem.kitPrice || 0);
       setKitMin(primaryItem.kitMin || 15);
       
-      setIngredientCost(primaryItem.ingredientCost || 2000);
+      setIngredientCost((primaryItem.ingredientCost || 2000) * totalQty);
       setCookMin(primaryItem.cookMin || 25);
       setLaborMin(primaryItem.laborMin || 10);
     }
@@ -84,15 +87,16 @@ export default function CostInputScreen({ cat, menu, loading, onNext, onBack }) 
 
   const isChicken = cat === "프랜차이즈" && combinedNames.match(/(치킨|후라이드|양념|뿌링클|맛쵸킹|황금올리브|슈프림|바사삭|구이|닭)/) && !combinedNames.includes("버거");
   const isPizza = combinedNames.includes("피자");
-  const isNoodle = !!primaryItem.hasNoodleOpt;
+  const isNoodle = !!primaryItem.hasNoodleOpt || combinedNames.match(/(짜장|짬뽕|면)/); // 짜장면도 곱배기 뜨게 보강
   const isPortion = !!primaryItem.hasPortion || combinedNames.match(/(족발|보쌈|탕수육|깐풍기)/);
 
-  const hasMealkit = primaryItem.type !== "DELIVERY_ONLY" && primaryItem.type !== "ALL_OR_DELIVERY";
-  const hasCooking = primaryItem.type === "ALL" || primaryItem.type === "COOKONLY";
+  const hasMealkit = primaryItem.menuType !== "DELIVERY_ONLY" && primaryItem.type !== "DELIVERY_ONLY";
+  const hasCooking = hasMealkit && primaryItem.menuType !== "NO_COOKING" && primaryItem.type !== "NO_COOKING";
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onNext({
+      menuName: combinedNames, 
       foodPrice,
       deliveryFee,
       minOrder,
@@ -145,12 +149,11 @@ export default function CostInputScreen({ cat, menu, loading, onNext, onBack }) 
                 <div className="flex gap-2">
                   {["뼈", "순살"].map(o => (
                     <button 
-                      key={o} 
-                      type="button" 
+                      key={o} type="button" 
                       onClick={() => {
                         if (chickenOption !== o) {
                           setChickenOption(o);
-                          setFoodPrice(prev => o === "순살" ? prev + 2000 : prev - 2000);
+                          setFoodPrice(prev => o === "순살" ? prev + (2000 * totalQty) : prev - (2000 * totalQty));
                         }
                       }} 
                       className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all ${chickenOption === o ? "bg-[#BA7517] text-white border-[#BA7517]" : "bg-white text-[#7A7466] border-[#D3D1C7] hover:bg-[#F1EFE8]"}`}
@@ -167,12 +170,11 @@ export default function CostInputScreen({ cat, menu, loading, onNext, onBack }) 
                 <div className="flex gap-2">
                   {["R", "L"].map(o => (
                     <button 
-                      key={o} 
-                      type="button" 
+                      key={o} type="button" 
                       onClick={() => {
                         if (pizzaSize !== o) {
                           setPizzaSize(o);
-                          setFoodPrice(prev => o === "L" ? prev + 4000 : prev - 4000);
+                          setFoodPrice(prev => o === "L" ? prev + (4000 * totalQty) : prev - (4000 * totalQty));
                         }
                       }} 
                       className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all ${pizzaSize === o ? "bg-[#BA7517] text-white border-[#BA7517]" : "bg-white text-[#7A7466] border-[#D3D1C7] hover:bg-[#F1EFE8]"}`}
@@ -189,12 +191,11 @@ export default function CostInputScreen({ cat, menu, loading, onNext, onBack }) 
                 <div className="flex gap-2">
                   {["보통", "곱배기"].map(o => (
                     <button 
-                      key={o} 
-                      type="button" 
+                      key={o} type="button" 
                       onClick={() => {
                         if (noodleSize !== o) {
                           setNoodleSize(o);
-                          setFoodPrice(prev => o === "곱배기" ? prev + 1000 : prev - 1000);
+                          setFoodPrice(prev => o === "곱배기" ? prev + (1000 * totalQty) : prev - (1000 * totalQty));
                         }
                       }} 
                       className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all ${noodleSize === o ? "bg-[#BA7517] text-white border-[#BA7517]" : "bg-white text-[#7A7466] border-[#D3D1C7] hover:bg-[#F1EFE8]"}`}
@@ -211,16 +212,14 @@ export default function CostInputScreen({ cat, menu, loading, onNext, onBack }) 
                 <div className="flex gap-1.5">
                   {["소", "중", "대", "특대"].map(o => {
                     const getOffset = (size) => {
-                      if (size === "중") return 5000;
-                      if (size === "대") return combinedNames.includes("보쌈") ? 18000 : (combinedNames.includes("탕수육") ? 20000 : 10000);
-                      if (size === "특대") return combinedNames.includes("보쌈") ? 27000 : 20000;
+                      if (size === "중") return 5000 * totalQty;
+                      if (size === "대") return (combinedNames.includes("보쌈") ? 18000 : (combinedNames.includes("탕수육") ? 20000 : 10000)) * totalQty;
+                      if (size === "특대") return (combinedNames.includes("보쌈") ? 27000 : 20000) * totalQty;
                       return 0;
                     };
-                    
                     return (
                       <button 
-                        key={o} 
-                        type="button" 
+                        key={o} type="button" 
                         onClick={() => {
                           if (portionSize !== o) {
                             const currentOffset = getOffset(portionSize);
@@ -280,7 +279,7 @@ export default function CostInputScreen({ cat, menu, loading, onNext, onBack }) 
             </>
           ) : (
             <div className="py-2 text-center text-xs text-[#7A7466] font-medium flex items-center justify-center gap-1">
-              🚫 직접 조리 불가 (배달 전용 메뉴)
+              🚫 직접 조리 불가 (배달/밀키트 전용)
             </div>
           )}
         </div>

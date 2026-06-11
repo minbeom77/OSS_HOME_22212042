@@ -2,46 +2,79 @@ package com.home.backend.controller;
 
 import com.home.backend.dto.AnalysisDto;
 import com.home.backend.service.CostCalculator;
-import com.home.backend.service.JwtService;
-import jakarta.validation.Valid;
+import com.home.backend.repository.AnalysisLogRepository;
+import com.home.backend.domain.AnalysisLog;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j; 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Slf4j 
+import java.util.List;
+import java.util.Map;
+
+@Slf4j
 @RestController
-@RequestMapping("/api/analysis") 
+@RequestMapping("/api/analysis")
 @RequiredArgsConstructor
 public class AnalysisController {
 
     private final CostCalculator costCalculator;
-    private final JwtService jwtService;
+    private final AnalysisLogRepository analysisLogRepository;
 
     @PostMapping
-    public ResponseEntity<AnalysisDto.Response> analyze(
-            @Valid @RequestBody AnalysisDto.Request dto,
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+    public ResponseEntity<AnalysisDto.Response> calculateCost(
+            @AuthenticationPrincipal String userId,
+            @RequestBody AnalysisDto.Request request) {
         
-        // 실제 회원 ID 또는 guest 확보
-        String userId = extractUserId(authHeader);
-        
-        if ("guest".equalsIgnoreCase(userId)) {
-            log.info("[GUEST 요청 감지] 비용 연산만 수행하고 DB 로그 저장은 안전하게 스킵합니다.");
-        } else {
-            log.info("🔐 유저 ID: {} - 비용 분석 연산 및 지출 로그 적재를 시작합니다", userId);
-        }
-        
-        return ResponseEntity.ok(costCalculator.calculate(userId, dto));
+        String resolvedUid = (userId == null) ? "guest" : userId;
+        AnalysisDto.Response response = costCalculator.calculate(resolvedUid, request);
+        return ResponseEntity.ok(response);
     }
 
-    private String extractUserId(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) return "guest";
-        try { 
-            return jwtService.extractUserId(authHeader.substring(7)); 
-        } catch (Exception e) { 
-            log.warn("⚠️ 에러 발생 : guest 모드로 전환합니다.");
-            return "guest"; 
+    @PostMapping("/select")
+    public ResponseEntity<Map<String, String>> saveFinalSelection(
+            @AuthenticationPrincipal String userId,
+            @RequestBody Map<String, String> payload) {
+        
+        String resolvedUid = (userId == null) ? "guest" : userId;
+        String menuName = payload.get("menuName");
+        String chosen = payload.get("chosen"); 
+
+        if (!"guest".equals(resolvedUid)) {
+            List<AnalysisLog> recentLogs = analysisLogRepository.findByUserIdOrderByDateDesc(resolvedUid);
+            
+            if (!recentLogs.isEmpty()) {
+                AnalysisLog lastLog = recentLogs.get(0); 
+                
+                int chosenCost = lastLog.getDeliveryCost(); 
+                if ("mealkit".equals(chosen) && lastLog.getMealkitCost() != null) {
+                    chosenCost = lastLog.getMealkitCost();
+                } else if ("cooking".equals(chosen) && lastLog.getCookingCost() != null) {
+                    chosenCost = lastLog.getCookingCost();
+                }
+                
+                int saving = Math.max(0, lastLog.getDeliveryCost() - chosenCost);
+
+                lastLog.setChosen(chosen);
+                lastLog.setChosenCost(chosenCost);
+                lastLog.setSaving(saving);
+
+                analysisLogRepository.save(lastLog);
+                log.info("[Analysis] 최종 선택 DB 업데이트 완료 - 아낀금액: {}", saving);
+            }
         }
+
+        return ResponseEntity.ok(Map.of("status", "success"));
+    }
+
+    @GetMapping("/logs")
+    public ResponseEntity<List<AnalysisLog>> getAnalysisLogs(@AuthenticationPrincipal String userId) {
+        if (userId == null || userId.equals("guest")) {
+            return ResponseEntity.ok(List.of());
+        }
+        
+        List<AnalysisLog> logs = analysisLogRepository.findByUserIdOrderByDateDesc(userId);
+        return ResponseEntity.ok(logs);
     }
 }
