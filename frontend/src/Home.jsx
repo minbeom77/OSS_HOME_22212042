@@ -104,7 +104,9 @@ export default function Home() {
     case "MENU": return <MenuSelectScreen userName={user.name} isGuest={user.isGuest} onNext={handleMenuSelectDone} onLogout={handleLogout} />;
     case "INPUT": return <CostInputScreen cat={selectedCat} menu={selectedMenu} loading={loading} onNext={handleCostInputDone} onBack={() => setScreen("MENU")} />;
     case "RESULT": return <ResultScreen cat={selectedCat} menu={selectedMenu} costs={calculationResult} onNext={(chosen) => handleResultDone(chosen)} onBack={() => setScreen("INPUT")} />;
-    case "REPORT": return <ReportScreen logs={monthlyLogs} isGuest={user.isGuest} onNewAnalysis={() => setScreen("MENU")} />;
+    
+    case "REPORT": return <ReportScreen logs={monthlyLogs} isGuest={user.isGuest} onNewAnalysis={() => setScreen("MENU")} onGoToSignUp={() => setScreen("SIGNUP")} />;
+    
     default: return <LoginScreen onLogin={handleLoginDone} onGoSignup={() => setScreen("SIGNUP")} />;
   }
 }

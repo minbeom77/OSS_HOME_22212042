@@ -74,7 +74,7 @@ public class AuthService {
     }
     
     public List<AnalysisDto.LogItem> getAllLogs(String userId) {
-        List<AnalysisLog> logs = analysisLogRepository.findByUserIdOrderByDateDesc(userId);
+        List<AnalysisLog> logs = analysisLogRepository.findByUserIdOrderByIdDesc(userId);
         return toLogItems(logs);
     }
 

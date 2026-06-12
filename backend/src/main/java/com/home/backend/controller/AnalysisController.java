@@ -28,8 +28,7 @@ public class AnalysisController {
             @RequestBody AnalysisDto.Request request) {
         
         String resolvedUid = (userId == null) ? "guest" : userId;
-        AnalysisDto.Response response = costCalculator.calculate(resolvedUid, request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(costCalculator.calculate(resolvedUid, request));
     }
 
     @PostMapping("/select")
@@ -38,30 +37,29 @@ public class AnalysisController {
             @RequestBody Map<String, String> payload) {
         
         String resolvedUid = (userId == null) ? "guest" : userId;
-        String menuName = payload.get("menuName");
+        
         String chosen = payload.get("chosen"); 
 
         if (!"guest".equals(resolvedUid)) {
-            List<AnalysisLog> recentLogs = analysisLogRepository.findByUserIdOrderByDateDesc(resolvedUid);
+            List<AnalysisLog> recentLogs = analysisLogRepository.findByUserIdOrderByIdDesc(resolvedUid);
             
             if (!recentLogs.isEmpty()) {
                 AnalysisLog lastLog = recentLogs.get(0); 
                 
-                int chosenCost = lastLog.getDeliveryCost(); 
+                int chosenCost = lastLog.getDeliveryCost(); // 기본 배달가 세팅
+
                 if ("mealkit".equals(chosen) && lastLog.getMealkitCost() != null) {
                     chosenCost = lastLog.getMealkitCost();
                 } else if ("cooking".equals(chosen) && lastLog.getCookingCost() != null) {
                     chosenCost = lastLog.getCookingCost();
                 }
-                
-                int saving = Math.max(0, lastLog.getDeliveryCost() - chosenCost);
 
                 lastLog.setChosen(chosen);
                 lastLog.setChosenCost(chosenCost);
-                lastLog.setSaving(saving);
+                lastLog.setSaving(Math.max(0, lastLog.getDeliveryCost() - chosenCost));
 
                 analysisLogRepository.save(lastLog);
-                log.info("[Analysis] 최종 선택 DB 업데이트 완료 - 아낀금액: {}", saving);
+                log.info("[Analysis] 최종 선택 저장 완료 - 유저의 순수 선택: {}", chosen);
             }
         }
 
@@ -73,8 +71,6 @@ public class AnalysisController {
         if (userId == null || userId.equals("guest")) {
             return ResponseEntity.ok(List.of());
         }
-        
-        List<AnalysisLog> logs = analysisLogRepository.findByUserIdOrderByDateDesc(userId);
-        return ResponseEntity.ok(logs);
+        return ResponseEntity.ok(analysisLogRepository.findByUserIdOrderByIdDesc(userId));
     }
 }
