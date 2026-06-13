@@ -4,8 +4,10 @@ WORKDIR /app
 
 COPY . .
 
+RUN ./gradlew wrapper --gradle-version 8.5
 RUN chmod +x ./gradlew
 RUN ./gradlew clean build -x test
+
 
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
