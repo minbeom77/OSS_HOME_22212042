@@ -32,6 +32,39 @@ public class ExternalApiService {
             "김치(신김치)", "신김치"
     );
 
+    public Integer fetchIngredientCost(String menuName) {
+        log.info("▶ [External API] '{}' 식재료 원가 총합 계산 시작...", menuName);
+        try {
+            // 1. 농사로 API에서 레시피(재료 목록) 가져오기
+            List<Ingredient> recipe = fetchRecipe(menuName);
+            if (recipe == null || recipe.isEmpty()) return null;
+
+            int totalCost = 0;
+            // 2. 각 재료별로 네이버 쇼핑 최저가를 긁어와서 합산
+            for (Ingredient ing : recipe) {
+                Ingredient pricedIng = fetchPrice(ing);
+                totalCost += pricedIng.getUnitPrice();
+            }
+            return totalCost > 0 ? totalCost : null;
+        } catch (Exception e) {
+            log.error("식재료비 총합 계산 중 오류: {}", e.getMessage());
+            return null;
+        }
+    }
+    public Integer fetchMealKitPrice(String menuName) {
+        log.info("▶ [External API] '{} 밀키트' 최저가 조회 시작...", menuName);
+        try {
+            Ingredient searchTarget = Ingredient.builder().name(menuName + " 밀키트").build();
+            Ingredient result = fetchPrice(searchTarget);
+            
+            if (result.getUnitPrice() == 500) return null; 
+            return result.getUnitPrice();
+        } catch (Exception e) {
+            log.error("밀키트 API 조회 중 오류: {}", e.getMessage());
+            return null;
+        }
+    }
+
     @SuppressWarnings("unchecked")
     public List<Ingredient> fetchRecipe(String menuName) {
         try {
@@ -83,13 +116,12 @@ public class ExternalApiService {
                     .amount(amount).unitPrice(0).build();
         }).collect(Collectors.toList());
     }
-
     
-    //2. 네이버 쇼핑 API 단가 조회
+    // 2. 네이버 쇼핑 API 단가 조회
     @SuppressWarnings("unchecked")
     public Ingredient fetchPrice(Ingredient ingredient) {
         try {
-            log.info("[H.O.M.E] 네이버 쇼핑 실시간 단가 추적 시작 -> 식재료명: {}", ingredient.getName());
+            log.info("[H.O.M.E] 네이버 쇼핑 실시간 단가 추적 시작 -> 검색어: {}", ingredient.getName());
             Map response = webClient.get()
                     .uri(u -> u.scheme("https").host("openapi.naver.com")
                             .path("/v1/search/shop.json")

@@ -1,4 +1,26 @@
-import apiClient from "./api"; // (axios 인스턴스 파일명에 맞게 경로 확인해주세요)
+import axios from "axios";
+
+const apiClient = axios.create({
+  baseURL: "http://localhost:8080", 
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("home_token");
+
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 
 // 1. 로그인 API
 export const apiLogin = async (userId, password) => {
@@ -33,13 +55,13 @@ export const apiSaveSelection = async (menuName, chosenOption) => {
   return res.data;
 };
 
-// 5. 월별 리포트 조회 API (기존 유지)
+// 5. 월별 리포트 조회 API
 export const apiGetMonthlyReport = async () => {
   const res = await apiClient.get("/api/report/monthly");
   return res.data;
 };
 
-// 6. 전체 분석 로그 조회 API (수정됨: 백엔드 AnalysisController 주소에 맞춤)
+// 6. 전체 분석 로그 조회 API 
 export const apiGetAllLogs = async () => {
   const res = await apiClient.get("/api/analysis/logs"); 
   return res.data;

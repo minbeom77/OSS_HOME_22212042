@@ -28,8 +28,7 @@ public class AnalysisController {
             @RequestBody AnalysisDto.Request request) {
         
         String resolvedUid = (userId == null) ? "guest" : userId;
-        AnalysisDto.Response response = costCalculator.calculate(resolvedUid, request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(costCalculator.calculate(resolvedUid, request));
     }
 
     @PostMapping("/select")
@@ -38,30 +37,35 @@ public class AnalysisController {
             @RequestBody Map<String, String> payload) {
         
         String resolvedUid = (userId == null) ? "guest" : userId;
-        String menuName = payload.get("menuName");
+        
         String chosen = payload.get("chosen"); 
+        String menuName = payload.get("menuName"); 
 
         if (!"guest".equals(resolvedUid)) {
-            List<AnalysisLog> recentLogs = analysisLogRepository.findByUserIdOrderByDateDesc(resolvedUid);
+            List<AnalysisLog> recentLogs = analysisLogRepository.findByUserIdOrderByIdDesc(resolvedUid);
             
-            if (!recentLogs.isEmpty()) {
-                AnalysisLog lastLog = recentLogs.get(0); 
+            AnalysisLog targetLog = recentLogs.stream()
+                    .filter(log -> log.getMenuName().equals(menuName))
+                    .findFirst()
+                    .orElse(null);
+
+            if (targetLog != null) {
+                int chosenCost = targetLog.getDeliveryCost(); 
                 
-                int chosenCost = lastLog.getDeliveryCost(); 
-                if ("mealkit".equals(chosen) && lastLog.getMealkitCost() != null) {
-                    chosenCost = lastLog.getMealkitCost();
-                } else if ("cooking".equals(chosen) && lastLog.getCookingCost() != null) {
-                    chosenCost = lastLog.getCookingCost();
+                if ("mealkit".equals(chosen) && targetLog.getMealkitCost() != null) {
+                    chosenCost = targetLog.getMealkitCost();
+                } else if ("cooking".equals(chosen) && targetLog.getCookingCost() != null) {
+                    chosenCost = targetLog.getCookingCost();
                 }
-                
-                int saving = Math.max(0, lastLog.getDeliveryCost() - chosenCost);
 
-                lastLog.setChosen(chosen);
-                lastLog.setChosenCost(chosenCost);
-                lastLog.setSaving(saving);
+                targetLog.setChosen(chosen);
+                targetLog.setChosenCost(chosenCost);
+                targetLog.setSaving(Math.max(0, targetLog.getDeliveryCost() - chosenCost));
 
-                analysisLogRepository.save(lastLog);
-                log.info("[Analysis] 최종 선택 DB 업데이트 완료 - 아낀금액: {}", saving);
+                analysisLogRepository.save(targetLog);
+                log.info("최종 선택 저장 완료 - 메뉴: {}, 유저 선택: {}", menuName, chosen);
+            } else {
+                log.warn("업데이트할 대상 로그를 찾지 못했습니다. - 메뉴: {}", menuName);
             }
         }
 
@@ -73,8 +77,6 @@ public class AnalysisController {
         if (userId == null || userId.equals("guest")) {
             return ResponseEntity.ok(List.of());
         }
-        
-        List<AnalysisLog> logs = analysisLogRepository.findByUserIdOrderByDateDesc(userId);
-        return ResponseEntity.ok(logs);
+        return ResponseEntity.ok(analysisLogRepository.findByUserIdOrderByIdDesc(userId));
     }
 }

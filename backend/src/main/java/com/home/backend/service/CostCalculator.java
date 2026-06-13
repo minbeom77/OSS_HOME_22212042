@@ -3,7 +3,6 @@ package com.home.backend.service;
 import com.home.backend.domain.AnalysisLog;
 import com.home.backend.domain.MenuType;
 import com.home.backend.domain.Menu;
-import com.home.backend.domain.Menu.Ingredient;
 import com.home.backend.dto.AnalysisDto;
 import com.home.backend.dto.AnalysisDto.BreakdownItem;
 import com.home.backend.repository.AnalysisLogRepository;
@@ -26,7 +25,7 @@ public class CostCalculator {
 
     private final MenuRepository menuRepository;
     private final AnalysisLogRepository analysisLogRepository;
-    private final ExternalApiService externalApiService;
+    private final ExternalApiService externalApiService; 
 
     @Transactional
     public AnalysisDto.Response calculate(String userId, AnalysisDto.Request req) {
@@ -36,23 +35,64 @@ public class CostCalculator {
             tempName = tempName.split(",")[0].trim();
         }
         final String targetName = tempName;   
+        
         Menu menu = menuRepository.findByMenuName(targetName)
                 .orElseGet(() -> createDynamicFallbackMenu(targetName, null, req.getFoodPrice()));
+      
+        int lack = Math.max(0, req.getMinOrder() - req.getFoodPrice());
+        int deliveryCost = req.getFoodPrice() + lack + req.getDeliveryFee();
 
-        int deliveryCost = calcDelivery(req);
         Integer mealkitCost = null;
+        int mkPrice = 0, mkOppCost = 0;
+        
         if (menu.getMenuType() != MenuType.DELIVERY_ONLY) {
-            mealkitCost = calcMealKit(req, menu); 
+            mkPrice = resolveMealKitPrice(targetName, req, menu);
+            int kitMin = req.getKitMin() != null ? req.getKitMin() : 15;
+            mkOppCost = (int) Math.round((kitMin / 60.0) * 0.2 * minWage);
+            mealkitCost = mkPrice + mkOppCost;
         }
 
         Integer cookingCost = null;
+        int ingCost = 0, ckOppCost = 0, ckLaborCost = 0, ckToolCost = 0;
+        
         if (menu.getMenuType() == MenuType.ALL) {
-            cookingCost = calcCooking(req, menu);
+            ingCost = resolveIngredientCost(targetName, req, menu);
+            int cookMin = req.getCookMin() != null ? req.getCookMin() : menu.getDefaultCookMin();
+            int laborMin = req.getLaborMin() != null ? req.getLaborMin() : 15;
+            ckToolCost = req.getToolCost() != null ? req.getToolCost() : 0;
+
+            ckOppCost = (int) Math.round((cookMin / 60.0) * 0.2 * minWage);
+            ckLaborCost = (int) Math.round((laborMin / 60.0) * minWage);
+            cookingCost = ingCost + ckOppCost + ckLaborCost + ckToolCost;
+        }
+        Map<String, List<BreakdownItem>> bd = new LinkedHashMap<>();
+        
+        bd.put("delivery", List.of(
+                new BreakdownItem("기본가 및 옵션가", req.getFoodPrice()),
+                new BreakdownItem("최소주문 미달 부족금액", lack),
+                new BreakdownItem("배달팁", req.getDeliveryFee())
+        ));
+
+        if (mealkitCost != null) {
+            bd.put("mealkit", List.of(
+                    new BreakdownItem("밀키트 구매가", mkPrice),
+                    new BreakdownItem("조리 기회비용", mkOppCost)
+            ));
         }
 
+        if (cookingCost != null) {
+            bd.put("cooking", List.of(
+                    new BreakdownItem("순수 식재료비", ingCost),
+                    new BreakdownItem("조리 기회비용", ckOppCost),
+                    new BreakdownItem("가사노동비(설거지 등)", ckLaborCost),
+                    new BreakdownItem("소모 도구 비용", ckToolCost)
+            ));
+        }
+
+
         String bestOpt = getBestOption(deliveryCost, mealkitCost, cookingCost);
-        Map<String, List<BreakdownItem>> bd = buildBreakdown(req, mealkitCost, cookingCost, resolveIngredientCost(req, menu), menu);
-        AnalysisLog log = AnalysisLog.create(
+        
+        AnalysisLog logData = AnalysisLog.create(
                 userId, req.getMenuName(), bestOpt,
                 getChosenCost(bestOpt, deliveryCost, mealkitCost, cookingCost),
                 deliveryCost, mealkitCost, cookingCost,
@@ -60,7 +100,7 @@ public class CostCalculator {
         );
 
         if (!"guest".equals(userId)) {
-            analysisLogRepository.save(log);
+            analysisLogRepository.save(logData);
         }
 
         return AnalysisDto.Response.builder()
@@ -68,9 +108,37 @@ public class CostCalculator {
                 .mealkit(mealkitCost)
                 .cooking(cookingCost)
                 .best(bestOpt)
-                .saving(log.getSaving())
-                .breakdown(bd)
+                .saving(logData.getSaving())
+                .breakdown(bd) 
                 .build();
+    }
+
+    private int resolveIngredientCost(String menuName, AnalysisDto.Request req, Menu menu) {
+        // 1순위: 사용자가 직접 입력한 값이 있으면 우선 적용
+        if (req.getIngredientCost() != null && req.getIngredientCost() > 0) return req.getIngredientCost();
+        
+        // 2순위: 백엔드에서 외부 API(농촌진흥청/네이버 등)를 직접 호출
+        try {
+            Integer apiCost = externalApiService.fetchIngredientCost(menuName);
+            if (apiCost != null && apiCost > 0) return apiCost;
+        } catch (Exception e) {
+            log.warn("외부 API 식재료비 조회 실패, DB 데이터로 폴백합니다. 메뉴: {}", menuName);
+        }
+
+        return menu.getIngredientCost() != null ? menu.getIngredientCost() : (int)(req.getFoodPrice() * 0.40);
+    }
+
+    private int resolveMealKitPrice(String menuName, AnalysisDto.Request req, Menu menu) {
+        if (req.getKitPrice() != null && req.getKitPrice() > 0) return req.getKitPrice();
+        
+        try {
+            Integer apiCost = externalApiService.fetchMealKitPrice(menuName);
+            if (apiCost != null && apiCost > 0) return apiCost;
+        } catch (Exception e) {
+            log.warn("외부 API 밀키트비 조회 실패, DB 데이터로 폴백합니다. 메뉴: {}", menuName);
+        }
+
+        return menu.getKitPrice() != null ? menu.getKitPrice() : (int)(req.getFoodPrice() * 0.55);
     }
 
     private Menu createDynamicFallbackMenu(String name, String subCat, int foodPrice) {
@@ -83,37 +151,6 @@ public class CostCalculator {
                 .ingredientCost((int)(foodPrice * 0.4))
                 .defaultCookMin(20)
                 .build();
-    }
-
-    private int calcDelivery(AnalysisDto.Request req) {
-        int lack = Math.max(0, req.getMinOrder() - req.getFoodPrice());
-        return req.getFoodPrice() + lack + req.getDeliveryFee();
-    }
-
-    private int calcMealKit(AnalysisDto.Request req, Menu menu) {
-        int kitPrice = (req.getKitPrice() != null && req.getKitPrice() > 0) ? req.getKitPrice() : 
-                (menu.getKitPrice() != null ? menu.getKitPrice() : (int)(req.getFoodPrice() * 0.55));
-        int kitMin = req.getKitMin() != null ? req.getKitMin() : 15;
-        int oppCost = (int) Math.round((kitMin / 60.0) * 0.2 * minWage);
-        return kitPrice + oppCost;
-    }
-
-    private int calcCooking(AnalysisDto.Request req, Menu menu) {
-        int ingredientCost = resolveIngredientCost(req, menu);
-        int cookMin = req.getCookMin() != null ? req.getCookMin() : menu.getDefaultCookMin();
-        int laborMin = req.getLaborMin() != null ? req.getLaborMin() : 15;
-        int toolCost = req.getToolCost() != null ? req.getToolCost() : 0;
-
-        int oppCost = (int) Math.round((cookMin / 60.0) * 0.2 * minWage);
-        int laborCost = (int) Math.round((laborMin / 60.0) * minWage);
-        return ingredientCost + oppCost + laborCost + toolCost;
-    }
-
-    private int resolveIngredientCost(AnalysisDto.Request req, Menu menu) {
-        if (req.getIngredientCost() != null && req.getIngredientCost() > 0) {
-            return req.getIngredientCost();
-        }
-        return menu.getIngredientCost() != null ? menu.getIngredientCost() : (int)(req.getFoodPrice() * 0.40);
     }
 
     private String getBestOption(int delivery, Integer mealkit, Integer cooking) {
@@ -132,31 +169,5 @@ public class CostCalculator {
             case "cooking" -> cooking != null ? cooking : delivery;
             default -> delivery;
         };
-    }
-
-    private Map<String, List<BreakdownItem>> buildBreakdown(
-            AnalysisDto.Request req, Integer mealkit, Integer cooking, int ingredientCost, Menu menu) {
-        Map<String, List<BreakdownItem>> bd = new LinkedHashMap<>();
-        bd.put("delivery", List.of(
-                new BreakdownItem("기본가 및 옵션가", req.getFoodPrice()),
-                new BreakdownItem("최소주문 부족금액", Math.max(0, req.getMinOrder() - req.getFoodPrice())),
-                new BreakdownItem("배달팁", req.getDeliveryFee())
-        ));
-
-        if (mealkit != null) {
-            bd.put("mealkit", List.of(
-                    new BreakdownItem("밀키트 구매가", (int)(req.getFoodPrice() * 0.55)),
-                    new BreakdownItem("조리 기회비용", (int) Math.round((15 / 60.0) * 0.2 * minWage))
-            ));
-        }
-        if (cooking != null) {
-            bd.put("cooking", List.of(
-                    new BreakdownItem("식재료비", ingredientCost),
-                    new BreakdownItem("조리 기회비용", (int) Math.round((menu.getDefaultCookMin() / 60.0) * 0.2 * minWage)),
-                    new BreakdownItem("가사노동비", (int) Math.round((15 / 60.0) * minWage)),
-                    new BreakdownItem("도구비용", req.getToolCost() != null ? req.getToolCost() : 0)
-            ));
-        }
-        return bd;
     }
 }
