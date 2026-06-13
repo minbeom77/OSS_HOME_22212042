@@ -39,27 +39,33 @@ public class AnalysisController {
         String resolvedUid = (userId == null) ? "guest" : userId;
         
         String chosen = payload.get("chosen"); 
+        String menuName = payload.get("menuName"); 
 
         if (!"guest".equals(resolvedUid)) {
             List<AnalysisLog> recentLogs = analysisLogRepository.findByUserIdOrderByIdDesc(resolvedUid);
             
-            if (!recentLogs.isEmpty()) {
-                AnalysisLog lastLog = recentLogs.get(0); 
-                
-                int chosenCost = lastLog.getDeliveryCost(); // 기본 배달가 세팅
+            AnalysisLog targetLog = recentLogs.stream()
+                    .filter(log -> log.getMenuName().equals(menuName))
+                    .findFirst()
+                    .orElse(null);
 
-                if ("mealkit".equals(chosen) && lastLog.getMealkitCost() != null) {
-                    chosenCost = lastLog.getMealkitCost();
-                } else if ("cooking".equals(chosen) && lastLog.getCookingCost() != null) {
-                    chosenCost = lastLog.getCookingCost();
+            if (targetLog != null) {
+                int chosenCost = targetLog.getDeliveryCost(); 
+                
+                if ("mealkit".equals(chosen) && targetLog.getMealkitCost() != null) {
+                    chosenCost = targetLog.getMealkitCost();
+                } else if ("cooking".equals(chosen) && targetLog.getCookingCost() != null) {
+                    chosenCost = targetLog.getCookingCost();
                 }
 
-                lastLog.setChosen(chosen);
-                lastLog.setChosenCost(chosenCost);
-                lastLog.setSaving(Math.max(0, lastLog.getDeliveryCost() - chosenCost));
+                targetLog.setChosen(chosen);
+                targetLog.setChosenCost(chosenCost);
+                targetLog.setSaving(Math.max(0, targetLog.getDeliveryCost() - chosenCost));
 
-                analysisLogRepository.save(lastLog);
-                log.info("[Analysis] 최종 선택 저장 완료 - 유저의 순수 선택: {}", chosen);
+                analysisLogRepository.save(targetLog);
+                log.info("최종 선택 저장 완료 - 메뉴: {}, 유저 선택: {}", menuName, chosen);
+            } else {
+                log.warn("업데이트할 대상 로그를 찾지 못했습니다. - 메뉴: {}", menuName);
             }
         }
 
