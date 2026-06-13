@@ -23,7 +23,7 @@ home:
 server:
   port: ${PORT:8080}
 
-allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
+allowed-origins: ${ALLOWED_ORIGINS:https://oss-home-22212042-gtpn.vercel.app} 
 
 ---
 
