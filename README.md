@@ -26,7 +26,7 @@
 
 인터넷이 연결된 환경이라면 아래의 상용 배포 링크를 통해 서버 구동 없이 즉시 서비스를 테스트할 수 있습니다.
 
-* **Frontend (Vercel):** https://oss-home-22212042-gtpn.vercel.app
+* **Frontend (Vercel):** https://oss-home-22212042-b86i.vercel.app/
 * **Backend (Render):** https://h-o-m-e.onrender.com
 
 >  **타임아웃 방지 안내**
