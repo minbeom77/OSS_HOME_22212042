@@ -4,8 +4,8 @@ WORKDIR /app
 
 COPY . .
 
-RUN ./gradlew wrapper --gradle-version 8.5
 RUN chmod +x ./gradlew
+RUN ./gradlew wrapper --gradle-version 8.5
 RUN ./gradlew clean build -x test
 
 
