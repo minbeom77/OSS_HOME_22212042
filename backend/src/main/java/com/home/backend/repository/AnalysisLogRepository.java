@@ -11,6 +11,6 @@ public interface AnalysisLogRepository extends JpaRepository<AnalysisLog, Long> 
 
     List<AnalysisLog> findByUserIdOrderByIdDesc(String userId);
 
-    @Query("SELECT a FROM AnalysisLog a WHERE a.userId = :userId AND a.date >= :startDate ORDER BY a.id DESC")
+   @Query("SELECT a FROM AnalysisLog a WHERE a.userId = :userId AND a.date >= :startDate ORDER BY a.date DESC")
     List<AnalysisLog> findByUserIdAndDateAfter(@Param("userId") String userId, @Param("startDate") LocalDate startDate);
 }

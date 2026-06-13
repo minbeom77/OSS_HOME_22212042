@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { apiRegister } from "../api/api";
+import { apiRegister } from "../api/apiClient";
 import Button from "../components/Button";
 import Input from "../components/Input";
 import Field from "../components/Field";
@@ -30,7 +30,7 @@ export default function SignupScreen({ onSignupDone, onBack }) {
     setError("");
     try {
      const user = await apiRegister(id.trim(), pw, name.trim());
-      onSignupDone(user.userId, user.name);
+      onSignupDone(user.userId, user.name, user.token);
     } catch (e) {
       setError(e.message);
     } finally {

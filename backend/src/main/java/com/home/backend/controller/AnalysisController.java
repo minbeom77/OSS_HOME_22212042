@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 @Slf4j
+@CrossOrigin(origins = {"http://localhost:5173", "https://oss-home-22212042-gtpn.vercel.app"})
 @RestController
 @RequestMapping("/api/analysis")
 @RequiredArgsConstructor

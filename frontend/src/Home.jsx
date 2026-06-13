@@ -5,8 +5,12 @@ import MenuSelectScreen from "./screens/MenuSelectScreen";
 import CostInputScreen from "./screens/CostInputScreen";
 import ResultScreen from "./screens/ResultScreen";
 import ReportScreen from "./screens/ReportScreen";
+
+// 1. apiClient.js 에서는 비용 연산 관련 API들을 가져옵니다.
 import { apiCalculateCost, apiSaveSelection, apiGetAllLogs } from "./api/apiClient";
-import apiClient from "./api/api"; 
+
+// 2. api.js 에서는 메뉴 상세 조회 기능을 가져옵니다. (기존 import 형식을 명확히 컴포넌트 함수로 변경)
+import { apiGetMenuDetails } from "./api/api"; 
 
 export default function Home() {
   const [screen, setScreen] = useState("LOGIN"); 
@@ -36,8 +40,9 @@ export default function Home() {
     setSelectedCat(cat);
     try {
       const combinedName = cartList.map(m => m.name).join(", ");
-      const res = await apiClient.get(`/api/menu/details?menuName=${encodeURIComponent(combinedName)}`);
-      const enrichedCart = cartList.map(item => ({ ...item, ...res.data }));
+      // api.js 에서 가져온 안전한 엔드포인트 함수를 사용합니다.
+      const resData = await apiGetMenuDetails(combinedName);
+      const enrichedCart = cartList.map(item => ({ ...item, ...resData }));
       setSelectedMenu(enrichedCart);
       setScreen("INPUT");
     } catch (e) {
@@ -67,6 +72,7 @@ export default function Home() {
         ingredientCost: inputData.ingredientCost
       };
 
+      // apiClient.js 에서 가져온 연산 API를 사용합니다.
       const res = await apiCalculateCost(payload);
       setCalculationResult(res);
       setScreen("RESULT");
@@ -86,6 +92,7 @@ export default function Home() {
     setLoading(true);
     try {
       const combinedMenuName = selectedMenu.map(m => m.name).join(", ");
+      // apiClient.js의 결과 저장 및 로그 가져오기 API 호출
       await apiSaveSelection(combinedMenuName, chosenOption);
       
       const res = await apiGetAllLogs();
@@ -104,9 +111,7 @@ export default function Home() {
     case "MENU": return <MenuSelectScreen userName={user.name} isGuest={user.isGuest} onNext={handleMenuSelectDone} onLogout={handleLogout} />;
     case "INPUT": return <CostInputScreen cat={selectedCat} menu={selectedMenu} loading={loading} onNext={handleCostInputDone} onBack={() => setScreen("MENU")} />;
     case "RESULT": return <ResultScreen cat={selectedCat} menu={selectedMenu} costs={calculationResult} onNext={(chosen) => handleResultDone(chosen)} onBack={() => setScreen("INPUT")} />;
-    
     case "REPORT": return <ReportScreen logs={monthlyLogs} isGuest={user.isGuest} onNewAnalysis={() => setScreen("MENU")} onGoToSignUp={() => setScreen("SIGNUP")} />;
-    
     default: return <LoginScreen onLogin={handleLoginDone} onGoSignup={() => setScreen("SIGNUP")} />;
   }
 }

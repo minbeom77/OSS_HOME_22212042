@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080",
+ baseURL: "https://h-o-m-e.onrender.com",
   timeout: 5000,
   headers: {
     "Content-Type": "application/json",
@@ -30,12 +30,14 @@ apiClient.interceptors.response.use(
   }
 );
 
-// 1. 로그인 
+
+// 1. 로그인
 export const apiLogin = async (userId, password) => {
   const res = await apiClient.post("/api/auth/login", {
     userId,
     password,
   });
+
   return res.data;
 };
 
@@ -46,13 +48,19 @@ export const apiRegister = async (userId, password, name) => {
     password,
     name,
   });
+
   return res.data;
 };
 
-// 3. 비용 분석 연산
+// 3. 비용 분석 연산 
 export const apiAnalyze = async (payload) => {
-  const res = await apiClient.post("/api/analysis", payload);
+  const res = await apiClient.post("/api/analysis/calculate", payload);
   return res.data;
 };
 
 export default apiClient;
+
+export const apiGetMenuDetails = async (menuName) => {
+  const res = await apiClient.get(`/api/menu/details?menuName=${encodeURIComponent(menuName)}`);
+  return res.data;
+};
